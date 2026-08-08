@@ -3,7 +3,7 @@ import axios from 'axios'
 // --- IMPORTANT: point this at your Flask backend ---
 // Same machine, browser on the PC:  http://127.0.0.1:5001/api
 // Backend on another PC on LAN:      http://<that PC's LAN IP>:5001/api
-export const BASE_URL = 'http://127.0.0.1:5002/api'
+export const BASE_URL = 'https://chili-doctor-backend.onrender.com/api'
 
 const api = axios.create({ baseURL: BASE_URL })
 

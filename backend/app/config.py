@@ -24,6 +24,16 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Render's free tier spins the service down when idle, which leaves stale
+    # PostgreSQL connections in the pool ("SSL SYSCALL error: EOF detected" on
+    # the next request). pool_pre_ping tests each connection before handing it
+    # out and transparently reconnects if it's dead; pool_recycle drops
+    # connections older than ~5 minutes.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 280,
+    }
+
     # --- JWT ---
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=7)
