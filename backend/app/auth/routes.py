@@ -25,8 +25,12 @@ def _validate_password(password):
     return True, None
 
 
+def _verification_link(user):
+    return f"{current_app.config['APP_BASE_URL']}/api/auth/verify/{user.verification_token}"
+
+
 def _send_verification_email(user):
-    link = f"{current_app.config['APP_BASE_URL']}/api/auth/verify/{user.verification_token}"
+    link = _verification_link(user)
 
     if not current_app.config.get("MAIL_USERNAME"):
         print(f"\n[DEV] Verification link for {user.email}:\n{link}\n", flush=True)
@@ -84,6 +88,8 @@ def register():
     db.session.add(user)
     db.session.commit()
 
+    link = _verification_link(user)
+
     app_obj = current_app._get_current_object()
     threading.Thread(
         target=_send_verification_email_async,
@@ -91,9 +97,13 @@ def register():
         daemon=True,
     ).start()
 
+    # Some hosting tiers block outbound SMTP, so the email may not arrive.
+    # Return the verification link as well, so the app can offer a tappable
+    # fallback and the account can still be activated.
     return jsonify({
         "message": "Account created. Please check your email to verify your account before logging in.",
         "user": user.to_dict(),
+        "verification_link": link,
     }), 201
 
 
