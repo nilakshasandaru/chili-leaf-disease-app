@@ -1,4 +1,5 @@
 import re
+import threading
 from flask import Blueprint, request, jsonify, render_template_string, current_app
 from flask_jwt_extended import create_access_token
 from flask_mail import Message
@@ -28,7 +29,7 @@ def _send_verification_email(user):
     link = f"{current_app.config['APP_BASE_URL']}/api/auth/verify/{user.verification_token}"
 
     if not current_app.config.get("MAIL_USERNAME"):
-        print(f"\n[DEV] Verification link for {user.email}:\n{link}\n")
+        print(f"\n[DEV] Verification link for {user.email}:\n{link}\n", flush=True)
         return True
 
     try:
@@ -39,11 +40,22 @@ def _send_verification_email(user):
                  f"If you didn't create this account, you can ignore this email.",
         )
         mail.send(msg)
+        print(f"[MAIL] Verification email sent to {user.email}", flush=True)
         return True
     except Exception as exc:
         current_app.logger.error(f"Failed to send verification email: {exc}")
-        print(f"\n[DEV] Email send failed, verification link for {user.email}:\n{link}\n")
+        print(f"\n[DEV] Email send failed, verification link for {user.email}:\n{link}\n", flush=True)
         return False
+
+
+def _send_verification_email_async(app_obj, user_id):
+    """Runs in a background thread, so a slow or blocked SMTP connection
+    can't stall the registration request (and trip gunicorn's worker
+    timeout). Needs its own app context."""
+    with app_obj.app_context():
+        user = User.query.get(user_id)
+        if user:
+            _send_verification_email(user)
 
 
 @auth_bp.post("/register")
@@ -72,7 +84,12 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    _send_verification_email(user)
+    app_obj = current_app._get_current_object()
+    threading.Thread(
+        target=_send_verification_email_async,
+        args=(app_obj, user.id),
+        daemon=True,
+    ).start()
 
     return jsonify({
         "message": "Account created. Please check your email to verify your account before logging in.",
@@ -86,7 +103,7 @@ def verify_email(token):
 
     page = """
     <html><body style="font-family: sans-serif; text-align:center; padding-top: 80px;">
-    <h2>{{title}}</h2><p>{{message}}</p>
+    <h2>{{ title }}</h2><p>{{ message }}</p>
     </body></html>
     """
 
