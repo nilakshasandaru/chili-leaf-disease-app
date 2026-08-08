@@ -7,7 +7,6 @@ backend/.env
 backend/uploads/*
 !backend/uploads/.gitkeep
 backend/migrations/
-backend/app/ml/saved_models/*.h5
 
 # Flutter
 mobile_app/build/

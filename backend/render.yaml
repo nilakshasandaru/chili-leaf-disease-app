@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: chili-doctor-backend
+    runtime: python
+    buildCommand: "pip install -r requirements-core.txt"
+    startCommand: "gunicorn run:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
