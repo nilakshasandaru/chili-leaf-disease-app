@@ -1,94 +1,224 @@
-# Chili Doctor — Flask Backend
+\# Chili Doctor — Flask Backend
 
-## Folder structure
 
-```
-flask_backend/
-├── run.py                     # app start කරන entry point
-├── seed.py                    # admin user + sample treatments දාන script එක
-├── requirements.txt
-├── .env.example                # meke copy karala .env ekak hadanna
+
+REST API for the Chili Leaf Disease Detection App: authentication, image upload,
+
+TensorFlow inference, and treatment guideline management.
+
+
+
+\## Folder Structure
+
+backend/
+
+├── run.py Entry point (creates tables + seed data on first run)
+
+├── seed.py Standalone seeding script
+
+├── requirements-core.txt Core dependencies (no TensorFlow)
+
+├── requirements-ml.txt TensorFlow, needed only for /api/diagnose
+
+├── .env.example Copy to .env and fill in real values
+
+├── render.yaml Render deployment config
+
 ├── app/
-│   ├── __init__.py            # create_app() — app factory
-│   ├── config.py               # .env eken settings read karanawa
-│   ├── extensions.py           # db, migrate, jwt, cors instances
-│   ├── models.py                # 4 tables: User, LeafImage, Diagnosis, TreatmentGuideline
-│   ├── auth/routes.py           # /api/auth/register, /api/auth/login
-│   ├── api/routes.py            # /api/diagnose, /api/history, /api/treatments...
-│   └── ml/predictor.py          # TensorFlow model load + 2-stage prediction
-├── migrations/                  # flask db init karama methana files generate wenawa
-└── uploads/                     # uploaded leaf images save wena folder eka
-```
 
-## Step by step — local machine එකේ run කරන විදිහ
+│ ├── init.py Application factory + error handlers
 
-### 1. MySQL database එක හදන්න
+│ ├── config.py Settings loaded from environment variables
+
+│ ├── extensions.py db, migrate, jwt, cors, mail instances
+
+│ ├── models.py User, LeafImage, Diagnosis, TreatmentGuideline
+
+│ ├── auth/routes.py Register, email verification, login
+
+│ ├── api/routes.py Diagnose, history, treatment guidelines
+
+│ └── ml/predictor.py Image preprocessing + CNN inference
+
+└── uploads/ Uploaded leaf images
+
+
+
+\## Local Setup
+
+
+
+\*\*1. Create the database\*\*
+
+
+
 ```sql
-CREATE DATABASE chili_doctor CHARACTER SET utf8mb4;
+
+CREATE DATABASE chili\_doctor CHARACTER SET utf8mb4;
+
 ```
 
-### 2. Python virtual environment + packages
+
+
+\*\*2. Virtual environment and dependencies\*\*
+
+
+
 ```bash
-cd flask_backend
+
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+
+venv\\Scripts\\activate          # Windows
+
+source venv/bin/activate       # macOS / Linux
+
+
+
+pip install -r requirements-core.txt
+
+pip install -r requirements-ml.txt   # only needed for /api/diagnose
+
 ```
 
-### 3. `.env` file එක හදන්න
+
+
+\*\*3. Environment file\*\*
+
+
+
 ```bash
+
 cp .env.example .env
-```
-`.env` file එක open කරලා ඔයාගේ MySQL password එකයි, `JWT_SECRET_KEY` එකයි දාන්න.
-(TensorFlow model file දෙක train කරන් ඉවර වෙනකම් `HEALTH_MODEL_PATH` /
-`DISEASE_MODEL_PATH` වැරදිලා තිබුනත් කමක් නෑ — auth/history/treatment
-endpoints ok විදිහට වැඩ කරයි, `/api/diagnose` විතරක් fail වෙන්නේ.)
 
-### 4. Database tables හදන්න (migrations)
+```
+
+
+
+Fill in your MySQL password and a JWT secret key. Leave `MAIL\_USERNAME` blank to
+
+skip real email sending — the verification link is printed to the console instead,
+
+which is fine for local testing.
+
+
+
+\*\*4. Create the tables\*\*
+
+
+
 ```bash
-export FLASK_APP=run.py
-flask db init          # මුල් වතාවට විතරයි — migrations/ folder එක හදනවා
+
+set FLASK\_APP=run.py           # Windows
+
+export FLASK\_APP=run.py        # macOS / Linux
+
+
+
+flask db init
+
 flask db migrate -m "initial tables"
-flask db upgrade        # මේකෙන් actual tables MySQL එකේ create වෙනවා
+
+flask db upgrade
+
 ```
 
-### 5. Sample data දාන්න (admin user + treatment guidelines)
+
+
+\*\*5. Seed the starting data\*\*
+
+
+
 ```bash
+
 python seed.py
-```
-මේකෙන් `admin@chilidoctor.com` / `ChangeThisPassword123` කියලා admin
-login එකක් හදනවා — production එකට යනකොට password එක මාරු කරන්න.
 
-### 6. Server එක run කරන්න
+```
+
+
+
+Creates an admin account (`admin@chilidoctor.com`) and eight treatment guidelines.
+
+
+
+\*\*6. Run\*\*
+
+
+
 ```bash
+
 python run.py
-```
-Server එක `http://localhost:5000` වල run වෙනවා. Test කරන්න:
-```bash
-curl http://localhost:5000/api/health
+
 ```
 
-## Endpoints සියල්ල
 
-| Method | Endpoint | Auth | විස්තරය |
+
+Test with `curl http://localhost:5001/api/health`.
+
+
+
+\## API Endpoints
+
+
+
+| Method | Endpoint | Auth | Description |
+
 |---|---|---|---|
-| POST | `/api/auth/register` | - | name, email, password |
-| POST | `/api/auth/login` | - | email, password → token |
-| POST | `/api/diagnose` | JWT | multipart image → prediction |
-| GET | `/api/history` | JWT | logged-in user ගේ past diagnoses |
-| GET | `/api/treatments` | JWT | guidelines ඔක්කොම |
-| GET | `/api/treatment/<disease_type>/<stage>` | JWT | එක guideline එකක් |
-| POST/PUT/DELETE | `/api/treatments...` | JWT (admin role) | React admin dashboard එකෙන් use කරන්න |
 
-## තව ඕන දේවල්
+| GET | `/api/health` | — | Service health check |
 
-1. **Model train කරන්න** — `app/ml/saved_models/` folder එකට ඔයාගේ
-   `.h5` files දෙක දාන්න (health_classifier.h5, disease_classifier.h5).
-   `predictor.py` එකේ input shape/output parsing එක ඔයාගේ model
-   architecture එකට match වෙන විදිහට adjust කරන්න.
-2. **Flutter side** — `upload_screen.dart` එකෙන් `http.post` කරලා
-   `/api/diagnose` එකට image එක multipart request එකක් විදිහට යවන්න,
-   login/register වලින් ලැබෙන token එක `shared_preferences` එකේ save
-   කරලා ඊළඟ requests වල `Authorization: Bearer <token>` header එකට දාන්න.
-3. **React admin** — login කරලා token save කරලා, `/api/treatments`
-   endpoints call කරලා guidelines manage කරන්න.
+| POST | `/api/auth/register` | — | Create an account (inactive until verified) |
+
+| GET | `/api/auth/verify/<token>` | — | Activate an account |
+
+| POST | `/api/auth/login` | — | Authenticate, returns a JWT |
+
+| POST | `/api/diagnose` | JWT | Upload a leaf image (multipart, field name `image`) |
+
+| GET | `/api/history` | JWT | Past diagnoses, optional `?from=` / `?to=` filters |
+
+| GET | `/api/treatments` | JWT | All treatment guidelines |
+
+| GET | `/api/treatment/<disease>/<stage>` | JWT | One guideline |
+
+| POST | `/api/treatments` | JWT (admin) | Create a guideline |
+
+| PUT | `/api/treatments/<id>` | JWT (admin) | Update a guideline |
+
+| DELETE | `/api/treatments/<id>` | JWT (admin) | Delete a guideline |
+
+
+
+\## Machine Learning Model
+
+
+
+Place the trained model at `app/ml/saved\_models/chili\_disease\_model.h5`.
+
+
+
+The model is a 9-class classifier (Healthy, plus four diseases at early and late
+
+stages). `app/ml/predictor.py` loads it lazily on the first prediction request and
+
+maps the predicted class to a disease type and stage.
+
+
+
+If the class order from training differs from the alphabetical default, update
+
+`CLASS\_NAMES` in `predictor.py` to match the `class\_indices` printed by Keras
+
+during training.
+
+
+
+\## Deployment Notes
+
+
+
+Deployed on Render with a managed PostgreSQL database. The same code runs against
+
+MySQL locally — `config.py` uses `DATABASE\_URL` when it is set, and falls back to
+
+the local MySQL settings otherwise.
+
