@@ -29,23 +29,55 @@ def _verification_link(user):
     return f"{current_app.config['APP_BASE_URL']}/api/auth/verify/{user.verification_token}"
 
 
+def _email_body(user, link):
+    return (
+        f"Hi {user.name},\n\n"
+        f"Please verify your Chili Doctor account by opening this link:\n{link}\n\n"
+        f"If you didn't create this account, you can ignore this email."
+    )
+
+
+def _send_via_resend(user, link):
+    """Resend uses an HTTPS API, so it works on hosts that block SMTP ports."""
+    import resend
+
+    resend.api_key = current_app.config["RESEND_API_KEY"]
+    resend.Emails.send({
+        "from": current_app.config["RESEND_FROM"],
+        "to": [user.email],
+        "subject": "Verify your Chili Doctor account",
+        "text": _email_body(user, link),
+    })
+
+
+def _send_via_smtp(user, link):
+    msg = Message(
+        subject="Verify your Chili Doctor account",
+        recipients=[user.email],
+        body=_email_body(user, link),
+    )
+    mail.send(msg)
+
+
 def _send_verification_email(user):
     link = _verification_link(user)
 
-    if not current_app.config.get("MAIL_USERNAME"):
+    # Prefer Resend (HTTPS API) when configured, fall back to SMTP for local
+    # development, and finally just log the link if neither is set up.
+    try:
+        if current_app.config.get("RESEND_API_KEY"):
+            _send_via_resend(user, link)
+            print(f"[MAIL] Verification email sent to {user.email} via Resend", flush=True)
+            return True
+
+        if current_app.config.get("MAIL_USERNAME"):
+            _send_via_smtp(user, link)
+            print(f"[MAIL] Verification email sent to {user.email} via SMTP", flush=True)
+            return True
+
         print(f"\n[DEV] Verification link for {user.email}:\n{link}\n", flush=True)
         return True
 
-    try:
-        msg = Message(
-            subject="Verify your Chili Doctor account",
-            recipients=[user.email],
-            body=f"Hi {user.name},\n\nPlease verify your account by opening this link:\n{link}\n\n"
-                 f"If you didn't create this account, you can ignore this email.",
-        )
-        mail.send(msg)
-        print(f"[MAIL] Verification email sent to {user.email}", flush=True)
-        return True
     except Exception as exc:
         current_app.logger.error(f"Failed to send verification email: {exc}")
         print(f"\n[DEV] Email send failed, verification link for {user.email}:\n{link}\n", flush=True)
@@ -53,9 +85,8 @@ def _send_verification_email(user):
 
 
 def _send_verification_email_async(app_obj, user_id):
-    """Runs in a background thread, so a slow or blocked SMTP connection
-    can't stall the registration request (and trip gunicorn's worker
-    timeout). Needs its own app context."""
+    """Runs in a background thread so a slow email provider can't stall
+    the registration request. Needs its own app context."""
     with app_obj.app_context():
         user = User.query.get(user_id)
         if user:
@@ -97,9 +128,8 @@ def register():
         daemon=True,
     ).start()
 
-    # Some hosting tiers block outbound SMTP, so the email may not arrive.
-    # Return the verification link as well, so the app can offer a tappable
-    # fallback and the account can still be activated.
+    # The link is also returned so the app can offer an in-app fallback if the
+    # email doesn't arrive (e.g. hosting tier restrictions).
     return jsonify({
         "message": "Account created. Please check your email to verify your account before logging in.",
         "user": user.to_dict(),

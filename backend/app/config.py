@@ -61,3 +61,6 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", MAIL_USERNAME or "no-reply@chilidoctor.local")
 
     APP_BASE_URL = os.getenv("APP_BASE_URL", f"http://127.0.0.1:{PORT}")
+# --- Resend (HTTP email API — works where SMTP ports are blocked) ---
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM = os.getenv("RESEND_FROM", "Chili Doctor <onboarding@resend.dev>")
