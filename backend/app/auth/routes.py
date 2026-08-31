@@ -37,6 +37,28 @@ def _email_body(user, link):
     )
 
 
+def _send_via_brevo(user, link):
+    """Brevo's HTTPS API - works on hosts that block outbound SMTP ports."""
+    import requests
+    response = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "api-key": current_app.config["BREVO_API_KEY"],
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+        json={
+            "sender": {"name": "Chili Doctor", "email": current_app.config["BREVO_FROM_EMAIL"]},
+            "to": [{"email": user.email, "name": user.name}],
+            "subject": "Verify your Chili Doctor account",
+            "textContent": _email_body(user, link),
+        },
+        timeout=15,
+    )
+    if response.status_code not in (200, 201, 202):
+        raise Exception(f"Brevo error {response.status_code}: {response.text}")
+
+
 def _send_via_elastic_email(user, link):
     import requests
     response = requests.post(
@@ -80,6 +102,11 @@ def _send_verification_email(user):
     link = _verification_link(user)
 
     try:
+        if current_app.config.get("BREVO_API_KEY"):
+            _send_via_brevo(user, link)
+            print(f"[MAIL] Verification email sent to {user.email} via Brevo", flush=True)
+            return True
+
         if current_app.config.get("ELASTIC_EMAIL_API_KEY"):
             _send_via_elastic_email(user, link)
             print(f"[MAIL] Verification email sent to {user.email} via Elastic Email", flush=True)

@@ -55,4 +55,8 @@ class Config:
     ELASTIC_EMAIL_API_KEY = os.getenv("ELASTIC_EMAIL_API_KEY", "")
     ELASTIC_EMAIL_FROM = os.getenv("ELASTIC_EMAIL_FROM", "chilidoctorapp@gmail.com")
 
+    # --- Email: Brevo (cloud, primary — sender verified, no domain needed) ---
+    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    BREVO_FROM_EMAIL = os.getenv("BREVO_FROM_EMAIL", "chilidoctorapp@gmail.com")
+
     APP_BASE_URL = os.getenv("APP_BASE_URL", f"http://127.0.0.1:{PORT}")
