@@ -5,16 +5,12 @@ basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 
 
 class Config:
-    # --- Local MySQL settings (used when DATABASE_URL isn't set) ---
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "3306")
     DB_NAME = os.getenv("DB_NAME", "chili_doctor")
 
-    # Render (and most cloud hosts) provide a single DATABASE_URL for the
-    # managed PostgreSQL instance. SQLAlchemy needs the "postgresql://"
-    # scheme, but Render still hands out the older "postgres://" form.
     _render_db = os.getenv("DATABASE_URL", "")
     if _render_db.startswith("postgres://"):
         _render_db = _render_db.replace("postgres://", "postgresql://", 1)
@@ -24,34 +20,25 @@ class Config:
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Render's free tier spins the service down when idle, which leaves stale
-    # PostgreSQL connections in the pool ("SSL SYSCALL error: EOF detected" on
-    # the next request). pool_pre_ping tests each connection before handing it
-    # out and transparently reconnects if it's dead; pool_recycle drops
-    # connections older than ~5 minutes.
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
         "pool_recycle": 280,
     }
 
-    # --- JWT ---
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=7)
 
-    # --- Uploads ---
     UPLOAD_FOLDER = os.path.join(basedir, os.getenv("UPLOAD_FOLDER", "uploads"))
     MAX_CONTENT_LENGTH = 8 * 1024 * 1024
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
 
-    # --- ML model ---
     MODEL_PATH = os.getenv(
         "MODEL_PATH", "app/ml/saved_models/chili_disease_model.h5"
     )
 
-    # --- Server ---
     PORT = int(os.getenv("PORT", "5001"))
 
-    # --- Email ---
+    # --- Email: SMTP (local dev) ---
     MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
     MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
     MAIL_USE_TLS = True
@@ -60,7 +47,12 @@ class Config:
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", MAIL_USERNAME or "no-reply@chilidoctor.local")
 
-    APP_BASE_URL = os.getenv("APP_BASE_URL", f"http://127.0.0.1:{PORT}")
-# --- Resend (HTTP email API — works where SMTP ports are blocked) ---
+    # --- Email: Resend (cloud fallback) ---
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-    RESEND_FROM = os.getenv("RESEND_FROM", "Chili Doctor <onboarding@resend.dev>")
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "Chili Doctor <onboarding@resend.dev>")
+
+    # --- Email: Elastic Email (cloud, primary — no domain verification needed) ---
+    ELASTIC_EMAIL_API_KEY = os.getenv("ELASTIC_EMAIL_API_KEY", "")
+    ELASTIC_EMAIL_FROM = os.getenv("ELASTIC_EMAIL_FROM", "chilidoctorapp@gmail.com")
+
+    APP_BASE_URL = os.getenv("APP_BASE_URL", f"http://127.0.0.1:{PORT}")

@@ -37,13 +37,30 @@ def _email_body(user, link):
     )
 
 
-def _send_via_resend(user, link):
-    """Resend uses an HTTPS API, so it works on hosts that block SMTP ports."""
-    import resend
+def _send_via_elastic_email(user, link):
+    import requests
+    response = requests.post(
+        "https://api.elasticemail.com/v2/email/send",
+        data={
+            "apikey": current_app.config["ELASTIC_EMAIL_API_KEY"],
+            "from": current_app.config["ELASTIC_EMAIL_FROM"],
+            "fromName": "Chili Doctor",
+            "to": user.email,
+            "subject": "Verify your Chili Doctor account",
+            "bodyText": _email_body(user, link),
+        },
+        timeout=15,
+    )
+    result = response.json()
+    if not result.get("success"):
+        raise Exception(f"Elastic Email error: {result.get('error')}")
 
+
+def _send_via_resend(user, link):
+    import resend
     resend.api_key = current_app.config["RESEND_API_KEY"]
     resend.Emails.send({
-        "from": current_app.config["RESEND_FROM"],
+        "from": current_app.config["RESEND_FROM_EMAIL"],
         "to": [user.email],
         "subject": "Verify your Chili Doctor account",
         "text": _email_body(user, link),
@@ -62,9 +79,12 @@ def _send_via_smtp(user, link):
 def _send_verification_email(user):
     link = _verification_link(user)
 
-    # Prefer Resend (HTTPS API) when configured, fall back to SMTP for local
-    # development, and finally just log the link if neither is set up.
     try:
+        if current_app.config.get("ELASTIC_EMAIL_API_KEY"):
+            _send_via_elastic_email(user, link)
+            print(f"[MAIL] Verification email sent to {user.email} via Elastic Email", flush=True)
+            return True
+
         if current_app.config.get("RESEND_API_KEY"):
             _send_via_resend(user, link)
             print(f"[MAIL] Verification email sent to {user.email} via Resend", flush=True)
@@ -85,8 +105,6 @@ def _send_verification_email(user):
 
 
 def _send_verification_email_async(app_obj, user_id):
-    """Runs in a background thread so a slow email provider can't stall
-    the registration request. Needs its own app context."""
     with app_obj.app_context():
         user = User.query.get(user_id)
         if user:
@@ -128,8 +146,6 @@ def register():
         daemon=True,
     ).start()
 
-    # The link is also returned so the app can offer an in-app fallback if the
-    # email doesn't arrive (e.g. hosting tier restrictions).
     return jsonify({
         "message": "Account created. Please check your email to verify your account before logging in.",
         "user": user.to_dict(),
